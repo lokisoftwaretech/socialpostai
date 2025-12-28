@@ -2,12 +2,12 @@
 Image Generator - 1080x1080 Instagram şablonu oluşturur.
 Template'e göre: arka plan, bayrak, ikon, haber görseli ve metin.
 SF Pro Medium font, -0.5 letter spacing.
+Metin ayırıcı çizgiden hizalı (bottom-aligned).
 """
 
 import os
 from PIL import Image, ImageDraw, ImageFont
-from typing import Optional
-import urllib.request
+from typing import Optional, List
 
 # Sabit değerler (template'e göre)
 CANVAS_SIZE = (1080, 1080)
@@ -15,13 +15,13 @@ BACKGROUND_PATH = "assets/background.png"
 FLAG_PATH = "assets/flag.png"
 ICON_PATH = "assets/ggicon.png"
 
-# Font ayarları - SF Pro Medium
-SF_PRO_PATH = "assets/fonts/SF-Pro-Display-Medium.otf"
-SF_PRO_URL = "https://github.com/AZ-AD/Apple-San-Francisco-Font-Collection-of-all-Fonts/raw/main/San%20Francisco/SF%20Pro/SF%20Pro%20Display%20Medium.otf"
+# Font - repo'daki font dosyası
+FONT_PATH = "assets/fonts/SF-Pro-Display-Medium.otf"
 
 # Fallback fonts
 FALLBACK_FONTS = [
-    "/System/Library/Fonts/SFNSDisplay.ttf",  # macOS SF
+    "/System/Library/Fonts/SFNS.ttf",  # macOS SF NS
+    "/System/Library/Fonts/SFNSDisplay.ttf",  # macOS SF NS Display
     "/System/Library/Fonts/Supplemental/Arial.ttf",  # macOS Arial
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",  # Linux
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"  # Linux fallback
@@ -41,12 +41,14 @@ NEWS_IMAGE_POSITION = (165, 100)
 NEWS_IMAGE_SIZE = (750, 420)
 NEWS_IMAGE_RADIUS = 16
 
-TEXT_POSITION = (55, 570)
+# Text bottom-aligned - çizgiden yukarı doğru
+DIVIDER_Y = 825
+TEXT_BOTTOM_Y = DIVIDER_Y - 25  # Çizgiden 25px yukarıda bitecek
+TEXT_LEFT_X = 55
 TEXT_MAX_WIDTH = 970
 TEXT_LINE_HEIGHT = 58
 TEXT_FONT_SIZE = 36
 
-DIVIDER_Y = 825
 DIVIDER_START = 55
 DIVIDER_END = 350
 
@@ -54,50 +56,28 @@ FOOTER_Y = 855
 FOOTER_FONT_SIZE = 22
 
 
-def download_sf_pro_font():
-    """SF Pro fontunu indirir."""
-    font_dir = os.path.dirname(SF_PRO_PATH)
-    if font_dir:
-        os.makedirs(font_dir, exist_ok=True)
-    
-    if not os.path.exists(SF_PRO_PATH):
-        print("SF Pro font indiriliyor...")
-        try:
-            urllib.request.urlretrieve(SF_PRO_URL, SF_PRO_PATH)
-            print(f"Font indirildi: {SF_PRO_PATH}")
-            return True
-        except Exception as e:
-            print(f"Font indirme hatası: {e}")
-            return False
-    return True
-
-
 def get_font(size: int) -> ImageFont.FreeTypeFont:
     """SF Pro Medium fontunu yükler, yoksa fallback kullanır."""
-    # Önce SF Pro'yu dene
-    if os.path.exists(SF_PRO_PATH):
+    # Önce repo'daki fontu dene
+    if os.path.exists(FONT_PATH):
         try:
-            return ImageFont.truetype(SF_PRO_PATH, size)
+            font = ImageFont.truetype(FONT_PATH, size)
+            print(f"✅ Font yüklendi: {FONT_PATH}")
+            return font
         except Exception as e:
-            print(f"SF Pro yüklenemedi: {e}")
-    
-    # SF Pro'yu indirmeyi dene
-    download_sf_pro_font()
-    if os.path.exists(SF_PRO_PATH):
-        try:
-            return ImageFont.truetype(SF_PRO_PATH, size)
-        except:
-            pass
+            print(f"⚠️ Repo fontu yüklenemedi: {e}")
     
     # Fallback fontları dene
     for font_path in FALLBACK_FONTS:
         if os.path.exists(font_path):
             try:
-                return ImageFont.truetype(font_path, size)
+                font = ImageFont.truetype(font_path, size)
+                print(f"✅ Fallback font yüklendi: {font_path}")
+                return font
             except:
                 continue
     
-    print("Uyarı: Hiçbir font bulunamadı, varsayılan kullanılıyor")
+    print("⚠️ Hiçbir font bulunamadı, varsayılan kullanılıyor")
     return ImageFont.load_default()
 
 
@@ -108,14 +88,9 @@ def draw_text_with_spacing(draw: ImageDraw.Draw, pos: tuple, text: str, font: Im
     total_width = 0
     
     for char in text:
-        # Karakteri çiz
         draw.text((x, y), char, font=font, fill=fill)
-        
-        # Karakter genişliğini al
         bbox = font.getbbox(char)
         char_width = bbox[2] - bbox[0]
-        
-        # Sonraki karakter pozisyonunu hesapla
         x += char_width + letter_spacing
         total_width += char_width + letter_spacing
     
@@ -129,11 +104,11 @@ def get_text_width_with_spacing(text: str, font: ImageFont.FreeTypeFont, letter_
         bbox = font.getbbox(char)
         char_width = bbox[2] - bbox[0]
         total_width += char_width + letter_spacing
-    return total_width - letter_spacing  # Son spacing'i çıkar
+    return total_width - letter_spacing if total_width > 0 else 0
 
 
 def wrap_text_with_spacing(text: str, font: ImageFont.FreeTypeFont, max_width: float, 
-                           letter_spacing: float = LETTER_SPACING) -> list:
+                           letter_spacing: float = LETTER_SPACING) -> List[str]:
     """Letter spacing ile metni satırlara böler."""
     words = text.split()
     lines = []
@@ -204,7 +179,6 @@ def generate_instagram_post(
     try:
         news_img = Image.open(news_image_path).convert('RGBA')
         
-        # Aspect ratio koruyarak resize
         img_ratio = news_img.width / news_img.height
         target_ratio = NEWS_IMAGE_SIZE[0] / NEWS_IMAGE_SIZE[1]
         
@@ -217,14 +191,11 @@ def generate_instagram_post(
         
         news_img = news_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
         
-        # Ortadan crop
         left = (new_width - NEWS_IMAGE_SIZE[0]) // 2
         top = (new_height - NEWS_IMAGE_SIZE[1]) // 2
         news_img = news_img.crop((left, top, left + NEWS_IMAGE_SIZE[0], top + NEWS_IMAGE_SIZE[1]))
         
-        # Rounded corners
         news_img = add_rounded_corners(news_img, NEWS_IMAGE_RADIUS)
-        
         canvas.paste(news_img, NEWS_IMAGE_POSITION, news_img)
     except Exception as e:
         print(f"Haber görseli yüklenemedi: {e}")
@@ -234,16 +205,20 @@ def generate_instagram_post(
             fill=(50, 55, 75, 255)
         )
     
-    # 4. Haber metnini ekle (SF Pro Medium, -0.5 letter spacing)
+    # 4. Haber metnini ekle (SF Pro Medium, -0.5 letter spacing, BOTTOM-ALIGNED)
     font = get_font(TEXT_FONT_SIZE)
     
     # Metni satırlara böl
     lines = wrap_text_with_spacing(news_text, font, TEXT_MAX_WIDTH, LETTER_SPACING)
     
-    # Metni çiz
-    y = TEXT_POSITION[1]
+    # BOTTOM-ALIGNED: Çizgiden yukarı doğru hesapla
+    total_text_height = len(lines) * TEXT_LINE_HEIGHT
+    text_start_y = TEXT_BOTTOM_Y - total_text_height
+    
+    # Metni çiz (yukarıdan aşağı)
+    y = text_start_y
     for line in lines:
-        draw_text_with_spacing(draw, (TEXT_POSITION[0], y), line, font, (255, 255, 255, 255), LETTER_SPACING)
+        draw_text_with_spacing(draw, (TEXT_LEFT_X, y), line, font, (255, 255, 255, 255), LETTER_SPACING)
         y += TEXT_LINE_HEIGHT
     
     # 5. Ayırıcı çizgi
@@ -273,7 +248,7 @@ def generate_instagram_post(
     canvas = canvas.convert('RGB')
     canvas.save(output_path, 'PNG', quality=95)
     
-    print(f"Instagram postu oluşturuldu: {output_path}")
+    print(f"✅ Instagram postu oluşturuldu: {output_path}")
     return output_path
 
 
@@ -281,7 +256,6 @@ if __name__ == "__main__":
     # Test
     test_text = "Başbakan Tusk, Ukrayna için güvenlik garantileri çağrısı yaptı. Avrupa liderleriyle video konferans gerçekleştirdi."
     
-    # Test için dummy görsel oluştur
     test_img = Image.new('RGB', (800, 500), (100, 100, 150))
     test_img.save("test_news_image.jpg")
     
