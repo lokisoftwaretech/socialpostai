@@ -15,8 +15,8 @@ BACKGROUND_PATH = "assets/background.png"
 FLAG_PATH = "assets/flag.png"
 ICON_PATH = "assets/ggicon.png"
 
-# Font - SF Pro Display Medium
-FONT_PATH = "assets/sf-pro-display/SFPRODISPLAYMEDIUM.OTF"
+# Font - SF Pro Display Bold (Semibold italic mevcut, normal için Bold kullanıyoruz)
+FONT_PATH = "assets/sf-pro-display/SFPRODISPLAYBOLD.OTF"
 
 # Fallback fonts
 FALLBACK_FONTS = [
