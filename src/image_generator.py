@@ -15,8 +15,8 @@ BACKGROUND_PATH = "assets/background.png"
 FLAG_PATH = "assets/flag.png"
 ICON_PATH = "assets/ggicon.png"
 
-# Font - repo'daki font dosyası
-FONT_PATH = "assets/fonts/SF-Pro-Display-Medium.otf"
+# Font - repo'daki font dosyası (macOS SFNS kopyası)
+FONT_PATH = "assets/fonts/SF-Pro.ttf"
 
 # Fallback fonts
 FALLBACK_FONTS = [
