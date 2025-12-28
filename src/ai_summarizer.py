@@ -1,5 +1,5 @@
 """
-AI News Summarizer - OpenAI kullanarak haberi 3 satırda özetler.
+AI News Summarizer - OpenAI kullanarak haberi kısa ve öz şekilde özetler.
 """
 
 import os
@@ -9,53 +9,52 @@ import json
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-SUMMARY_PROMPT = """Sen deneyimli bir haber yazarısın. Aşağıdaki haberi Türkçe olarak TAM OLARAK 3 SATIRDA özetleyeceksin.
+SUMMARY_PROMPT = """Sen deneyimli bir Türk haber yazarısın. Aşağıdaki haberi Türkçe olarak KISA VE ÖZ şekilde özetleyeceksin.
 
-ÖNEMLİ KURALLAR:
+KRİTİK KURALLAR:
 
-1. **YAPI (Her satır ayrı bir paragraf):**
-   - 1. Satır: HÜKÜM-GİRİŞ → Ana olay, ne oldu? (Kim ne yaptı?)
-   - 2. Satır: DETAY-BAĞLAM → 5N1K bilgileri (Nerede, ne zaman, nasıl, neden)
-   - 3. Satır: SONUÇ-ETKİ → Bu olayın sonucu veya etkisi ne olacak?
+1. **UZUNLUK SINIRI:**
+   - TOPLAM maksimum 180 karakter (boşluklar dahil)
+   - Bu sınırı ASLA aşma
+   - 2-3 cümle yeterli
 
-2. **KORUNACAK BİLGİLER:**
-   - Sayısal veriler (tarihler, yüzdeler, para miktarları, istatistikler)
-   - Resmi makam isimleri (Başbakan, Bakan, Cumhurbaşkanı ismi)
-   - Kurum/kuruluş isimleri
-   - Yer isimleri
+2. **CÜMLE YAPISI:**
+   - Her cümle MUTLAKA nokta ile bitmeli
+   - Yarım kalan cümle YASAK
+   - Cümle ortasında kesme YASAK
 
-3. **DİL VE ÜSLUP:**
-   - Profesyonel haber dili kullan
-   - Zaman kiplerini doğru kullan:
-     * "planlanıyor" (gelecekte olacak)
-     * "gerçekleşti/gerçekleşecek" (olmuş/olacak)
-     * "açıklandı/duyuruldu" (resmi açıklama)
-   - Kısa ve öz cümleler kur
-   - Pasif yapıdan kaçın, aktif yapı kullan
+3. **İÇERİK:**
+   - Ana olay + Kim + Ne zaman (mümkünse)
+   - Gereksiz detayları atla
+   - En önemli bilgiyi ver
 
-4. **FORMAT:**
-   - Her satır maksimum 80 karakter olmalı (görsel şablona sığması için)
-   - Toplam 3 satır, nokta ile bitir
-   - "Kim:", "Ne:", gibi etiketler KULLANMA, direkt haberi yaz
+4. **KORUNACAKLAR:**
+   - Resmi makam isimleri (Başbakan Tusk, Cumhurbaşkanı vb.)
+   - Kritik sayısal veriler
+   - Zaman kipleri doğru olmalı
+
+5. **DİL:**
+   - Profesyonel haber dili
+   - Aktif cümleler
+   - Kısa ve net
 
 HABER:
 Başlık: {title}
 İçerik: {content}
 Kaynak: {source}
-Tarih: {date}
+
+ÖNEMLİ: Özet 180 karakteri geçmemeli ve her cümle nokta ile bitmeli!
 
 YANIT FORMATI (Sadece JSON döndür):
 {{
-    "line1": "<1. satır - Hüküm/Giriş>",
-    "line2": "<2. satır - Detay/Bağlam>",
-    "line3": "<3. satır - Sonuç/Etki>",
-    "keywords": ["<haber için 3-5 anahtar kelime>"]
+    "summary": "<maksimum 180 karakter özet, nokta ile biten tam cümleler>",
+    "keywords": ["<3-5 anahtar kelime>"]
 }}
 """
 
 
 def summarize_news(news_item: Dict) -> Optional[Dict]:
-    """Haberi 3 satırda özetler."""
+    """Haberi kısa ve öz şekilde özetler."""
     if not news_item:
         print("Haber boş!")
         return None
@@ -67,19 +66,18 @@ def summarize_news(news_item: Dict) -> Optional[Dict]:
     prompt = SUMMARY_PROMPT.format(
         title=news_item.get('title', ''),
         content=content,
-        source=news_item.get('source', ''),
-        date=news_item.get('published', '')
+        source=news_item.get('source', '')
     )
     
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Sen profesyonel bir haber yazarısın. Sadece JSON formatında yanıt ver."},
+                {"role": "system", "content": "Sen profesyonel bir haber yazarısın. Kısa, öz ve tam cümlelerle yaz. Sadece JSON formatında yanıt ver."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.4,
-            max_tokens=500
+            temperature=0.3,
+            max_tokens=300
         )
         
         result_text = response.choices[0].message.content.strip()
@@ -92,16 +90,22 @@ def summarize_news(news_item: Dict) -> Optional[Dict]:
         
         result = json.loads(result_text)
         
+        summary_text = result.get("summary", "")
+        
+        # Son kontrol: nokta ile bitmiyor mu?
+        if summary_text and not summary_text.endswith('.'):
+            # Son cümleyi bul ve kes
+            last_period = summary_text.rfind('.')
+            if last_period > 0:
+                summary_text = summary_text[:last_period + 1]
+        
         summary = {
-            "line1": result.get("line1", ""),
-            "line2": result.get("line2", ""),
-            "line3": result.get("line3", ""),
-            "full_text": f"{result.get('line1', '')}\n{result.get('line2', '')}\n{result.get('line3', '')}",
+            "full_text": summary_text,
             "keywords": result.get("keywords", [])
         }
         
         print("--- ÖZET ---")
-        print(summary["full_text"])
+        print(f"Metin ({len(summary_text)} karakter): {summary_text}")
         print(f"Anahtar kelimeler: {summary['keywords']}")
         
         return summary
